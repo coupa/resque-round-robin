@@ -44,6 +44,8 @@ module Resque::Plugins
           log! "Found job on #{queue}"
           return job
         end
+        # Start the next search at the queue after the one from which we pick a job.
+        @n += 1
       end
 
       nil
