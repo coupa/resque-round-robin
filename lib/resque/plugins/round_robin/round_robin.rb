@@ -1,9 +1,19 @@
 
 module Resque::Plugins
   module RoundRobin
-    def filter_busy_queues qs
-      busy_queues = Resque::Worker.working.map { |worker| worker.job["queue"] }.compact
-      Array(qs.dup).compact - busy_queues
+    class Configuration
+      attr_accessor :max_qeueue_workers
+       def initialize
+        @max_qeueue_workers = {}
+      end
+    end
+
+    def self.configuration
+      @configuration ||= Configuration.new
+    end
+
+    def self.configure
+      yield(configuration)
     end
 
     def rotated_queues
@@ -18,22 +28,35 @@ module Resque::Plugins
       end
     end
 
-    def queue_depth queuename
+    def queue_depth(queuename)
       busy_queues = Resque::Worker.working.map { |worker| worker.job["queue"] }.compact
       # find the queuename, count it.
       busy_queues.select {|q| q == queuename }.size
     end
+    
+    def queue_empty?(queuename)
+      Resque.data_store.queue_size(queuename) == 0
+    end
 
-    DEFAULT_QUEUE_DEPTH = 0
-    def should_work_on_queue? queuename
-      return true if @queues.include? '*'  # workers with QUEUES=* are special and are not subject to queue depth setting
-      return false if Resque.data_store.queue_size(queuename) == 0
-      max = DEFAULT_QUEUE_DEPTH
+    DEFAULT_QUEUE_DEPTH = 20
+    def max_qeueue_workers_for(queuename)
+      default_max_workers = DEFAULT_QUEUE_DEPTH
       unless ENV["RESQUE_QUEUE_DEPTH"].nil? || ENV["RESQUE_QUEUE_DEPTH"] == ""
-        max = ENV["RESQUE_QUEUE_DEPTH"].to_i
+        default_max_workers = ENV["RESQUE_QUEUE_DEPTH"].to_i
       end
-      return true if max == 0 # 0 means no limiting
+
+      max_qeueue_workers = Resque::Plugins::RoundRobin.configuration.max_qeueue_workers
+      max_qeueue_workers.fetch(queuename.scan(/_([^_]*)/)&.last&.first, default_max_workers)
+    end
+
+    def should_work_on_queue?(queuename)
+      return true if @queues.include?('*')  # workers with QUEUES=* are special and are not subject to queue depth setting
+      return false if queue_empty?(queuename)
+      
       cur_depth = queue_depth(queuename)
+      max = max_qeueue_workers_for(queuename)
+      return true if max == 0 # 0 means no limiting
+
       log! "queue #{queuename} depth = #{cur_depth} max = #{max}"
       return true if cur_depth < max
       false
