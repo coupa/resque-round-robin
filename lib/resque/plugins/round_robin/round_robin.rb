@@ -27,6 +27,7 @@ module Resque::Plugins
     DEFAULT_QUEUE_DEPTH = 0
     def should_work_on_queue? queuename
       return true if @queues.include? '*'  # workers with QUEUES=* are special and are not subject to queue depth setting
+      return false if Resque.data_store.queue_size(queuename) == 0
       max = DEFAULT_QUEUE_DEPTH
       unless ENV["RESQUE_QUEUE_DEPTH"].nil? || ENV["RESQUE_QUEUE_DEPTH"] == ""
         max = ENV["RESQUE_QUEUE_DEPTH"].to_i
