@@ -38,6 +38,8 @@ module Resque::Plugins
       Resque.data_store.queue_size(queuename) == 0
     end
 
+    def remove_empty_queue(queuename)
+
     DEFAULT_QUEUE_DEPTH = 20
     def max_qeueue_workers_for(queuename)
       default_max_workers = DEFAULT_QUEUE_DEPTH
@@ -51,7 +53,12 @@ module Resque::Plugins
 
     def should_work_on_queue?(queuename)
       return true if @queues.include?('*')  # workers with QUEUES=* are special and are not subject to queue depth setting
-      return false if queue_empty?(queuename)
+      if queue_empty?(queuename)
+        # Immediately remove empty queue, to remove clutter in resque-web and
+        # to avoid inefficiency looking at empty queues.
+        Resque.data_store.remove_queue(queuename)
+        return false
+      end
       
       cur_depth = queue_depth(queuename)
       max = max_qeueue_workers_for(queuename)
