@@ -38,8 +38,6 @@ module Resque::Plugins
       Resque.data_store.queue_size(queuename) == 0
     end
 
-    def remove_empty_queue(queuename)
-
     DEFAULT_QUEUE_DEPTH = 20
     def max_qeueue_workers_for(queuename)
       default_max_workers = DEFAULT_QUEUE_DEPTH
