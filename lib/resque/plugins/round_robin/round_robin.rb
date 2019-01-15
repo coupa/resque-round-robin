@@ -72,6 +72,7 @@ module Resque::Plugins
       qs.each do |queue|
         log! "Checking #{queue}"
         if should_work_on_queue?(queue) && job = Resque::Job.reserve(queue)
+          @last_queue = queue
           log! "Found job on #{queue}"
           return job
         end
@@ -86,10 +87,40 @@ module Resque::Plugins
       raise e
     end
 
+    def reserve_from_last_queue
+      if @last_queue
+        Resque::Job.reserve(@last_queue)
+      end
+    end
+
+    def jobs_per_fork
+      (ENV['JOBS_PER_FORK'] || 1).to_i
+    end
+
+    def perform_with_jobs_per_fork(job)
+      jobs_performed ||= 0
+      while jobs_performed < jobs_per_fork do
+        break if @shutdown
+        if jobs_performed == 0
+          perform_without_jobs_per_fork(job)
+        elsif another_job = reserve_from_last_queue
+          perform_without_jobs_per_fork(another_job)
+        else
+          break # No more work for this queue.
+        end
+        jobs_performed += 1
+      end
+    end
+
     def self.included(receiver)
       receiver.class_eval do
         alias reserve_without_round_robin reserve
         alias reserve reserve_with_round_robin
+
+        if ENV['JOBS_PER_FORK']
+          alias perform_without_jobs_per_fork perform
+          alias perform perform_with_jobs_per_fork
+        end
       end
     end
 
