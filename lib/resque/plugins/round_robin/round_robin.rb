@@ -2,7 +2,8 @@
 module Resque::Plugins
   module RoundRobin
     def filter_busy_queues qs
-      busy_queues = Resque::Worker.working.map { |worker| worker.job["queue"] }.compact
+      # Here self.class refers to Resque::Worker.
+      busy_queues = self.class.working.map { |worker| worker.job["queue"] }.compact
       Array(qs.dup).compact - busy_queues
     end
 
@@ -19,7 +20,8 @@ module Resque::Plugins
     end
 
     def queue_depth queuename
-      busy_queues = Resque::Worker.working.map { |worker| worker.job["queue"] }.compact
+      # Here self.class refers to Resque::Worker.
+      busy_queues = self.class.working.map { |worker| worker.job["queue"] }.compact
       # find the queuename, count it.
       busy_queues.select {|q| q == queuename }.size
     end
@@ -42,7 +44,7 @@ module Resque::Plugins
       qs = rotated_queues
       qs.each do |queue|
         log! "Checking #{queue}"
-        if should_work_on_queue?(queue) && job = Resque::Job.reserve(queue)
+        if should_work_on_queue?(queue) && job = self.respond_to?(:fetch_job) ? fetch_job(queue) : Resque::Job.reserve(queue) # calls `fetch_job` method of Resque::Worker if defined
           log! "Found job on #{queue}"
           return job
         end
