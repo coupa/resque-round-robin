@@ -1,7 +1,7 @@
 module Resque
   module Plugins
     module RoundRobin
-      VERSION = "0.1.4"
+      VERSION = "0.1.6"
     end
   end
 end
